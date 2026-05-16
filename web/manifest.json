@@ -1,0 +1,13 @@
+{
+  "name": "🌀 Cloth Web - 3D布料网页模拟",
+  "short_name": "Cloth Web",
+  "description": "Three.js 3D布料物理模拟，网页内容贴附在光滑布料表面，支持鼠标拖拽交互",
+  "start_url": "../index.html",
+  "display": "standalone",
+  "background_color": "#0f0f23",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}

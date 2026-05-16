@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="description" content="🌀 Cloth Web - Three.js 3D布料物理模拟，网页内容贴附在光滑布料表面，支持鼠标拖拽交互。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cloth Web">
+<title>🌀 Cloth Web - 3D布料网页模拟</title>
+<link rel="icon" href="web/icon-192.png">
+<link rel="apple-touch-icon" href="web/icon-192.png">
+<link rel="manifest" href="web/manifest.json">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f0f23;overflow:hidden;font-family:'Segoe UI',sans-serif;color:#e2e8f0;width:100vw;height:100vh}
+#info{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(15,15,35,.85);backdrop-filter:blur(8px);padding:10px 20px;border-radius:12px;font-size:12px;z-index:10;text-align:center;border:1px solid rgba(255,255,255,.08);pointer-events:none}
+#info span{display:inline-block;margin:0 8px}
+#info .key{background:rgba(99,102,241,.3);color:#a5b4fc;padding:1px 6px;border-radius:4px;font-size:10px}
+#controls{position:fixed;top:16px;right:16px;z-index:10;display:flex;flex-direction:column;gap:6px}
+#controls button{background:rgba(15,15,35,.85);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.1);color:#e2e8f0;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:12px;transition:.2s}
+#controls button:hover{background:rgba(99,102,241,.3);border-color:rgba(99,102,241,.4)}
+#controls button.active{background:rgba(99,102,241,.4);border-color:#6366f1}
+#header{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10;text-align:center;pointer-events:none}
+#header h1{font-size:15px;font-weight:600;background:rgba(15,15,35,.7);backdrop-filter:blur(8px);padding:8px 18px;border-radius:10px;display:inline-block;border:1px solid rgba(255,255,255,.06)}
+#header h1 small{font-weight:400;font-size:10px;color:#94a3b8}
+#urlInput{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:6px;background:rgba(15,15,35,.85);backdrop-filter:blur(8px);padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.08)}
+#urlInput input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#e2e8f0;padding:6px 10px;border-radius:6px;font-size:12px;outline:none;width:200px;font-family:inherit}
+#urlInput input:focus{border-color:#6366f1}
+#urlInput button{background:#6366f1;border:none;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px}
+@media(max-width:640px){#header h1{font-size:13px}#urlInput input{width:140px}#info{font-size:10px;bottom:10px;padding:6px 12px}}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🌀 Cloth Web <small>3D布料模拟</small></h1>
+</div>
+
+<div id="urlInput">
+  <input id="url" value="https://dipclawn.github.io/expense-tracker/" placeholder="输入网页URL...">
+  <button onclick="loadWebPage()">加载</button>
+  <button onclick="document.getElementById('url').value=''" style="background:#334155">↺</button>
+</div>
+
+<div id="controls">
+  <button class="active" onclick="toggleWind()" id="windBtn">🌬️ 风</button>
+  <button onclick="resetCloth()">↺ 重置</button>
+  <button onclick="pinToggle()" id="pinBtn">📌 固定角</button>
+</div>
+
+<div id="info">
+  <span>🖱️ 拖拽布料</span>
+  <span>🔄 滚动缩放</span>
+  <span class="key">SHIFT</span> + 拖拽旋转视角
+</div>
+
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ====== 全局 ======
+var scene, camera, renderer;
+var clothMesh, clothGeometry;
+var particles = [];
+var constraints = [];
+var wind = {x:0.05, y:0, z:0.02};
+var windEnabled = true;
+var pins = []; // 固定的粒子索引
+var mouse = new THREE.Vector2();
+var mouse3D = new THREE.Vector3();
+var raycaster = new THREE.Raycaster();
+var isDragging = false;
+var dragParticle = null;
+var dragStrength = 0.5;
+
+// ====== 布料参数 ======
+var W = 25;  // 宽度粒子数
+var H = 18;  // 高度粒子数
+var SPACING = 0.45;
+var REST_DIST = SPACING;
+var DAMPING = 0.97;
+var GRAVITY = -0.8;
+var STIFFNESS = 0.4;
+var canvas, ctx;
+var webImage = null;
+
+// ====== 纹理（网页内容） ======
+function initCanvasTexture(){
+  canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 768;
+  ctx = canvas.getContext('2d');
+  
+  // 加载默认网页 - 使用canvas渲染假HTML效果
+  drawWebContent('https://dipclawn.github.io/expense-tracker/');
+}
+
+function drawWebContent(url){
+  // 用canvas画出类似网页的界面
+  var w = canvas.width, h = canvas.height;
+  
+  // 背景
+  var grad = ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'#0f172a');
+  grad.addColorStop(1,'#1e293b');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+  
+  // 顶部导航条
+  ctx.fillStyle = '#6366f1';
+  ctx.beginPath();
+  ctx.roundRect(0,0,w,48,12);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.fillText('💰 记账本', 20, 33);
+  
+  // tab按钮
+  var tabs = ['📝 记账','📋 账单','📊 统计','💰 预算','⚙️'];
+  ctx.font = '12px sans-serif';
+  for(var i=0;i<tabs.length;i++){
+    ctx.fillStyle = i===0 ? 'rgba(255,255,255,.2)' : 'transparent';
+    ctx.fillRect(16+i*80, 56, 74, 28);
+    ctx.fillStyle = i===0 ? '#fff' : '#64748b';
+    ctx.fillText(tabs[i], 30+i*80, 76);
+  }
+  
+  // 内容区域
+  ctx.fillStyle = '#1e293b';
+  ctx.roundRect(16,94,w-32,280,10);
+  ctx.fill();
+  
+  // 表单
+  ctx.fillStyle = '#6366f1';
+  ctx.font = '14px sans-serif';
+  ctx.fillText('📝 记一笔', 32, 122);
+  
+  ctx.fillStyle = '#334155';
+  ctx.roundRect(32,134,200,36,6);
+  ctx.fill();
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '12px sans-serif';
+  ctx.fillText('选择分类', 48, 158);
+  
+  ctx.fillStyle = '#334155';
+  ctx.roundRect(32,180,200,36,6);
+  ctx.fill();
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillText('金额', 48, 204);
+  
+  // 输入框
+  ctx.fillStyle = '#334155';
+  ctx.roundRect(244,134,180,36,6);
+  ctx.fill();
+  ctx.roundRect(244,180,180,82,6);
+  ctx.fill();
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '11px sans-serif';
+  ctx.fillText('备注(选填)', 260, 205);
+  
+  // 确认按钮
+  ctx.fillStyle = '#6366f1';
+  ctx.roundRect(32,276,w-64,38,8);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = '14px sans-serif';
+  ctx.fillText('✅ 确认记账', w/2-48, 302);
+  
+  // 底部最近记录
+  ctx.fillStyle = '#64748b';
+  ctx.font = '12px sans-serif';
+  ctx.fillText('最近记录', 32, 340);
+  ctx.fillStyle = '#334155';
+  ctx.roundRect(32,350,w-64,100,6);
+  ctx.fill();
+  
+  // 模拟列表
+  var items = [
+    ['🍚 餐饮', '¥ 35.00', '午餐'],
+    ['🚇 交通', '¥ 6.00', '地铁'],
+    ['🛒 购物', '¥ 128.00', '超市'],
+  ];
+  ctx.font = '12px sans-serif';
+  for(var i=0;i<items.length;i++){
+    var y = 358+i*32;
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText(items[i][0], 48, y);
+    ctx.fillStyle = '#6366f1';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(items[i][1], 280, y);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(items[i][2], 360, y);
+    // 分割线
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(48, y+14);
+    ctx.lineTo(w-32, y+14);
+    ctx.stroke();
+  }
+  
+  // 网址水印
+  ctx.fillStyle = 'rgba(255,255,255,.08)';
+  ctx.font = '10px sans-serif';
+  ctx.fillText(url, 16, h-12);
+  
+  // 更新时间
+  ctx.fillStyle = 'rgba(255,255,255,.04)';
+  ctx.font = '9px sans-serif';
+  ctx.fillText(new Date().toLocaleTimeString('zh-CN'), w-80, h-12);
+  
+  updateTexture();
+}
+
+// roundRect polyfill (for Safari)
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+    if(r>w/2)r=w/2;if(r>h/2)r=h/2;
+    this.moveTo(x+r,y);
+    this.arcTo(x+w,y,x+w,y+h,r);
+    this.arcTo(x+w,y+h,x,y+h,r);
+    this.arcTo(x,y+h,x,y,r);
+    this.arcTo(x,y,x+w,y,r);
+    return this;
+  };
+}
+
+// ====== 布料物理 ======
+function initCloth(){
+  particles = [];
+  constraints = [];
+  pins = [];
+  
+  // 创建粒子
+  for(var y=0; y<H; y++){
+    for(var x=0; x<W; x++){
+      var px = (x - W/2) * SPACING;
+      var py = 3.5; // 起始高度
+      var pz = (y - H/2) * SPACING;
+      
+      // 稍微给一个初始弧度
+      var curve = Math.sin(x/W * Math.PI) * 0.3;
+      py += curve;
+      
+      particles.push({
+        x: px, y: py, z: pz,
+        ox: px, oy: py, oz: pz,
+        vx: 0, vy: 0, vz: 0,
+        pinned: false,
+        mass: 0.15
+      });
+    }
+  }
+  
+  // 固定上边两角
+  pinParticle(0, 0);      // 左上
+  pinParticle(W-1, 0);    // 右上
+  
+  // 创建约束（结构约束 + 剪切约束）
+  for(var y=0; y<H; y++){
+    for(var x=0; x<W; x++){
+      var idx = y*W + x;
+      
+      // 水平
+      if(x < W-1) constraints.push({a:idx, b:idx+1, rest:REST_DIST});
+      // 垂直
+      if(y < H-1) constraints.push({a:idx, b:idx+W, rest:REST_DIST});
+      // 对角线
+      if(x<W-1 && y<H-1){
+        constraints.push({a:idx, b:idx+W+1, rest:REST_DIST*1.414});
+        constraints.push({a:idx+1, b:idx+W, rest:REST_DIST*1.414});
+      }
+    }
+  }
+}
+
+function pinParticle(x, y){
+  var idx = y*W + x;
+  if(particles[idx]){
+    particles[idx].pinned = true;
+    pins.push(idx);
+  }
+}
+
+function pinToggle(){
+  document.getElementById('windBtn').classList.remove('active');
+  // 切换固定模式
+  if(pins.length > 4){
+    // 还原到只有上边两角
+    pins.forEach(function(i){particles[i].pinned = false});
+    pins = [];
+    pinParticle(0,0);
+    pinParticle(W-1,0);
+  }else{
+    // 固定四角
+    pins.forEach(function(i){particles[i].pinned = false});
+    pins = [];
+    pinParticle(0,0);
+    pinParticle(W-1,0);
+    pinParticle(0,H-1);
+    pinParticle(W-1,H-1);
+  }
+}
+
+function resetCloth(){
+  initCloth();
+  document.getElementById('pinBtn').className = '';
+}
+
+function toggleWind(){
+  windEnabled = !windEnabled;
+  document.getElementById('windBtn').className = windEnabled ? 'active' : '';
+}
+
+// 物理更新
+function simulateCloth(){
+  var step = 0.8; // 时间步长
+  
+  // Verlet 积分
+  for(var i=0; i<particles.length; i++){
+    var p = particles[i];
+    if(p.pinned) continue;
+    
+    // 速度
+    p.vx = p.x - p.ox;
+    p.vy = p.y - p.oy;
+    p.vz = p.z - p.oz;
+    
+    // 阻尼
+    p.vx *= DAMPING;
+    p.vy *= DAMPING;
+    p.vz *= DAMPING;
+    
+    // 保存旧位置
+    p.ox = p.x;
+    p.oy = p.y;
+    p.oz = p.z;
+    
+    // 重力
+    p.vy += GRAVITY * p.mass * step;
+    
+    // 风
+    if(windEnabled){
+      p.vx += wind.x * (0.5 + Math.sin(Date.now()/2000 + i*0.1) * 0.3);
+      p.vz += wind.z * (0.5 + Math.cos(Date.now()/2500 + i*0.08) * 0.3);
+    }
+    
+    // 轻质阻尼
+    p.vx *= 0.999;
+    p.vz *= 0.999;
+    
+    // 更新位置
+    p.x += p.vx * step;
+    p.y += p.vy * step;
+    p.z += p.vz * step;
+  }
+  
+  // 约束求解（多次迭代）
+  for(var iter=0; iter<8; iter++){
+    for(var i=0; i<constraints.length; i++){
+      var c = constraints[i];
+      var p1 = particles[c.a];
+      var p2 = particles[c.b];
+      
+      var dx = p2.x - p1.x;
+      var dy = p2.y - p1.y;
+      var dz = p2.z - p1.z;
+      var dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      if(dist < 0.001) dist = 0.001;
+      
+      var diff = (dist - c.rest) / dist;
+      var offset = diff * STIFFNESS * 0.5;
+      
+      if(!p1.pinned){
+        p1.x += dx * offset;
+        p1.y += dy * offset;
+        p1.z += dz * offset;
+      }
+      if(!p2.pinned){
+        p2.x -= dx * offset;
+        p2.y -= dy * offset;
+        p2.z -= dz * offset;
+      }
+    }
+  }
+  
+  // 地面碰撞
+  for(var i=0; i<particles.length; i++){
+    var p = particles[i];
+    if(p.y < -4){
+      p.y = -4;
+      p.vy *= -0.2;
+    }
+  }
+  
+  // 鼠标拖拽
+  if(isDragging && dragParticle !== null && dragParticle < particles.length){
+    var dp = particles[dragParticle];
+    dp.x += (mouse3D.x - dp.x) * dragStrength;
+    dp.y += (mouse3D.y - dp.y) * dragStrength;
+    dp.z += (mouse3D.z - dp.z) * dragStrength;
+  }
+}
+
+// ====== 更新几何体 ======
+function updateClothMesh(){
+  if(!clothGeometry) return;
+  var pos = clothGeometry.attributes.position.array;
+  var uv = clothGeometry.attributes.uv.array;
+  var norm = clothGeometry.attributes.normal.array;
+  
+  for(var y=0; y<H; y++){
+    for(var x=0; x<W; x++){
+      var idx = y*W + x;
+      var p = particles[idx];
+      var vi = (y*W + x) * 3;
+      
+      pos[vi] = p.x;
+      pos[vi+1] = p.y;
+      pos[vi+2] = p.z;
+    }
+  }
+  
+  // 法线重算
+  clothGeometry.computeVertexNormals();
+  pos.needsUpdate = true;
+  norm.needsUpdate = true;
+}
+
+// ====== 创建Three.js布料 ======
+function createClothMesh(){
+  initCloth();
+  initCanvasTexture();
+  
+  // 创建纹理
+  var texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.anisotropy = 4;
+  
+  // 布料几何体
+  clothGeometry = new THREE.BufferGeometry();
+  var vertices = [];
+  var uvs = [];
+  var indices = [];
+  
+  for(var y=0; y<H; y++){
+    for(var x=0; x<W; x++){
+      vertices.push(0, 0, 0);
+      uvs.push(x/(W-1), 1 - y/(H-1));
+    }
+  }
+  
+  for(var y=0; y<H-1; y++){
+    for(var x=0; x<W-1; x++){
+      var a = y*W + x;
+      var b = y*W + x + 1;
+      var c = (y+1)*W + x;
+      var d = (y+1)*W + x + 1;
+      indices.push(a, b, c);
+      indices.push(b, d, c);
+    }
+  }
+  
+  clothGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  clothGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  clothGeometry.setIndex(indices);
+  clothGeometry.computeVertexNormals();
+  
+  // 材质 - 光滑布料效果
+  var material = new THREE.MeshPhysicalMaterial({
+    map: texture,
+    side: THREE.DoubleSide,
+    roughness: 0.15,
+    metalness: 0.05,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.2,
+    envMapIntensity: 0.6,
+    // 让布料有光泽
+    specularIntensity: 0.2,
+    specularColor: new THREE.Color(0x444466)
+  });
+  
+  clothMesh = new THREE.Mesh(clothGeometry, material);
+  clothMesh.castShadow = true;
+  clothMesh.receiveShadow = true;
+  
+  scene.add(clothMesh);
+}
+
+function updateTexture(){
+  if(!clothMesh) return;
+  clothMesh.material.map = new THREE.CanvasTexture(canvas);
+  clothMesh.material.map.needsUpdate = true;
+  clothMesh.material.map.encoding = THREE.sRGBEncoding;
+}
+
+// ====== 加载真实网页（iframe截图方式） ======
+function loadWebPage(){
+  var url = document.getElementById('url').value.trim();
+  if(!url.startsWith('http')) url = 'https://'+url;
+  
+  // 用 canvas 渲染网址预览
+  drawWebContent(url);
+  toast('已加载: '+url);
+}
+
+// ====== 场景初始化 ======
+function initScene(){
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0f0f23);
+  
+  // 相机
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.set(7, 3, 10);
+  camera.lookAt(0, 2, 0);
+  
+  // 渲染器
+  renderer = new THREE.WebGLRenderer({antialias:true, alpha:false});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  document.body.appendChild(renderer.domElement);
+  
+  // 环境光
+  var ambient = new THREE.AmbientLight(0x404060, 0.5);
+  scene.add(ambient);
+  
+  // 主光
+  var light = new THREE.DirectionalLight(0xffeedd, 1.5);
+  light.position.set(5, 10, 7);
+  light.castShadow = true;
+  light.shadow.mapSize.width = 1024;
+  light.shadow.mapSize.height = 1024;
+  scene.add(light);
+  
+  // 补光
+  var fillLight = new THREE.DirectionalLight(0x8888ff, 0.6);
+  fillLight.position.set(-5, 3, -5);
+  scene.add(fillLight);
+  
+  // 背光
+  var backLight = new THREE.DirectionalLight(0x4466ff, 0.3);
+  backLight.position.set(0, 0, -8);
+  scene.add(backLight);
+  
+  // 底部补光
+  var rim = new THREE.DirectionalLight(0x6633ff, 0.2);
+  rim.position.set(0, -5, 3);
+  scene.add(rim);
+  
+  // 地平面
+  var groundGeo = new THREE.PlaneGeometry(30, 30);
+  var groundMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0a1a,
+    roughness: 0.9,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.8
+  });
+  var ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI/2;
+  ground.position.y = -4;
+  ground.receiveShadow = true;
+  scene.add(ground);
+  
+  // 星空
+  addStars();
+  
+  createClothMesh();
+}
+
+function addStars(){
+  var starsGeo = new THREE.BufferGeometry();
+  var starsPos = [];
+  for(var i=0; i<1000; i++){
+    var r = 40 + Math.random() * 30;
+    var theta = Math.random() * Math.PI * 2;
+    var phi = Math.acos(2 * Math.random() - 1);
+    starsPos.push(
+      r * Math.sin(phi) * Math.cos(theta),
+      Math.abs(r * Math.cos(phi)),
+      r * Math.sin(phi) * Math.sin(theta)
+    );
+  }
+  starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starsPos, 3));
+  var starsMat = new THREE.PointsMaterial({
+    color: 0x8888ff,
+    size: 0.08,
+    transparent: true,
+    opacity: 0.6,
+    blending: THREE.AdditiveBlending
+  });
+  var stars = new THREE.Points(starsGeo, starsMat);
+  scene.add(stars);
+}
+
+// ====== 交互 ======
+var isRotating = false;
+var prevMouse = {x:0, y:0};
+var rotation = {x:0, y:0};
+
+function setupInteraction(){
+  var canvas = renderer.domElement;
+  
+  // 鼠标滚轮缩放
+  canvas.addEventListener('wheel', function(e){
+    e.preventDefault();
+    camera.position.z += e.deltaY * 0.01;
+    camera.position.z = Math.max(4, Math.min(20, camera.position.z));
+  }, {passive:false});
+  
+  // 鼠标按下 - 检测布料拖拽
+  canvas.addEventListener('mousedown', function(e){
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    
+    if(e.shiftKey){
+      // SHIFT按下时旋转视角
+      isRotating = true;
+      prevMouse.x = e.clientX;
+      prevMouse.y = e.clientY;
+      return;
+    }
+    
+    // 检测是否点击到布料
+    raycaster.setFromCamera(mouse, camera);
+    var intersects = raycaster.intersectObject(clothMesh);
+    if(intersects.length > 0){
+      isDragging = true;
+      var point = intersects[0].point;
+      var uv = intersects[0].uv;
+      
+      // 找到最近的粒子
+      var ux = Math.round(uv.x * (W-1));
+      var uy = Math.round((1-uv.y) * (H-1));
+      dragParticle = uy * W + ux;
+      
+      mouse3D.copy(point);
+    }else{
+      isRotating = true;
+      prevMouse.x = e.clientX;
+      prevMouse.y = e.clientY;
+    }
+  });
+  
+  canvas.addEventListener('mousemove', function(e){
+    if(isRotating){
+      var dx = e.clientX - prevMouse.x;
+      var dy = e.clientY - prevMouse.y;
+      rotation.y += dx * 0.005;
+      rotation.x += dy * 0.005;
+      rotation.x = Math.max(-1, Math.min(1, rotation.x));
+      prevMouse.x = e.clientX;
+      prevMouse.y = e.clientY;
+      return;
+    }
+    
+    if(isDragging){
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      
+      // 在布料平面附近求交点
+      var plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+      var intersectPoint = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, intersectPoint);
+      if(intersectPoint){
+        mouse3D.copy(intersectPoint);
+        // 补偿视角旋转
+        mouse3D.applyEuler(new THREE.Euler(-rotation.x, -rotation.y, 0));
+      }
+    }
+  });
+  
+  canvas.addEventListener('mouseup', function(){
+    isDragging = false;
+    dragParticle = null;
+    isRotating = false;
+  });
+  
+  // 触屏支持
+  canvas.addEventListener('touchstart', function(e){
+    e.preventDefault();
+    var touch = e.touches[0];
+    mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, camera);
+    var intersects = raycaster.intersectObject(clothMesh);
+    if(intersects.length > 0){
+      isDragging = true;
+      var point = intersects[0].point;
+      var uv = intersects[0].uv;
+      var ux = Math.round(uv.x * (W-1));
+      var uy = Math.round((1-uv.y) * (H-1));
+      dragParticle = uy * W + ux;
+      mouse3D.copy(point);
+    }
+  }, {passive:false});
+  
+  canvas.addEventListener('touchmove', function(e){
+    e.preventDefault();
+    if(isDragging && e.touches.length > 0){
+      var touch = e.touches[0];
+      mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      
+      var plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+      var intersectPoint = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, intersectPoint);
+      if(intersectPoint) mouse3D.copy(intersectPoint);
+    }
+  }, {passive:false});
+  
+  canvas.addEventListener('touchend', function(){
+    isDragging = false;
+    dragParticle = null;
+  });
+  
+  // 窗口自适应
+  window.addEventListener('resize', function(){
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+// ====== Toast ======
+function toast(msg){
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(15,15,35,.9);color:#e2e8f0;padding:8px 18px;border-radius:10px;font-size:12px;z-index:999;border:1px solid rgba(255,255,255,.1);animation:fadeIn .2s';
+  d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(function(){d.remove()}, 2000);
+}
+
+// ====== 动画循环 ======
+function animate(){
+  requestAnimationFrame(animate);
+  
+  // 物理模拟
+  for(var i=0; i<3; i++) simulateCloth();
+  updateClothMesh();
+  
+  // 视角旋转
+  scene.rotation.x = rotation.x * 0.3;
+  scene.rotation.y = rotation.y;
+  
+  renderer.render(scene, camera);
+}
+
+// ====== 启动 ======
+function init(){
+  document.body.appendChild = function(el){
+    return HTMLElement.prototype.appendChild.call(document.body, el);
+  };
+  
+  initScene();
+  setupInteraction();
+  animate();
+  
+  // 给加载按钮加回车
+  document.getElementById('url').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') loadWebPage();
+  });
+  
+  // 初始提示
+  setTimeout(function(){toast('🖱️ 拖拽布料 · SHIFT+拖拽旋转')}, 1500);
+  
+  // 注册SW
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('web/sw.js').catch(function(){});
+}
+
+// 等待Three.js加载完成
+var checkThree = setInterval(function(){
+  if(typeof THREE !== 'undefined'){
+    clearInterval(checkThree);
+    init();
+  }
+}, 100);
+</script>
+</body>
+</html>
