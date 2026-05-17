@@ -71,7 +71,7 @@ var mouse3D = new THREE.Vector3();
 var raycaster = new THREE.Raycaster();
 var isDragging = false;
 var dragParticle = null;
-var dragStrength = 0.5;
+var dragStrength = 0.15; // 柔和拖拽，避免布料过度变形
 
 // ====== 布料参数 ======
 var W = 25;  // 宽度粒子数
@@ -342,7 +342,7 @@ function simulateCloth(){
   }
   
   // 约束求解（多次迭代）
-  for(var iter=0; iter<8; iter++){
+  for(var iter=0; iter<15; iter++){ // 更多迭代让布料更平滑
     for(var i=0; i<constraints.length; i++){
       var c = constraints[i];
       var p1 = particles[c.a];
@@ -379,12 +379,23 @@ function simulateCloth(){
     }
   }
   
-  // 鼠标拖拽
+  // 鼠标拖拽（柔和跟随）
   if(isDragging && dragParticle !== null && dragParticle < particles.length){
     var dp = particles[dragParticle];
-    dp.x += (mouse3D.x - dp.x) * dragStrength;
-    dp.y += (mouse3D.y - dp.y) * dragStrength;
-    dp.z += (mouse3D.z - dp.z) * dragStrength;
+    var dx = mouse3D.x - dp.x;
+    var dy = mouse3D.y - dp.y;
+    var dz = mouse3D.z - dp.z;
+    // 限制单步移动距离，防止撕裂
+    var dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+    var maxDist = SPACING * 2;
+    if(dist > maxDist){
+      dx = dx/dist*maxDist;
+      dy = dy/dist*maxDist;
+      dz = dz/dist*maxDist;
+    }
+    dp.x += dx * dragStrength;
+    dp.y += dy * dragStrength;
+    dp.z += dz * dragStrength;
   }
 }
 
