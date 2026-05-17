@@ -295,8 +295,9 @@ function initScene(){
   scene=new THREE.Scene();
   scene.background=new THREE.Color(0x050510);
   
-  camera=new THREE.PerspectiveCamera(35,window.innerWidth/window.innerHeight,0.1,50);
-  camera.position.set(2.5,1.2,6);
+  var isMob=window.innerWidth<768;
+  camera=new THREE.PerspectiveCamera(isMob?40:35,window.innerWidth/window.innerHeight,0.1,50);
+  camera.position.set(isMob?3:2.5,isMob?1.5:1.2,isMob?7:6);
   camera.lookAt(0,0,0);
   
   renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
@@ -408,6 +409,9 @@ function setupInteraction(){
   el.addEventListener('touchend',function(){isDragging=false;dragParticle=null;isRotating=false;});
   window.addEventListener('resize',function(){
     camera.aspect=window.innerWidth/window.innerHeight;
+    var m=window.innerWidth<768;
+    camera.fov=m?40:35;
+    camera.position.set(m?3:2.5,m?1.5:1.2,m?7:6);
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth,window.innerHeight);
   });
