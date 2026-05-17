@@ -96,22 +96,19 @@ function initCanvasTexture(){
 }
 
 function drawWebContent(url){
-  // 用canvas画出类似网页的界面
+  // 用canvas画出类似网页的界面（浅色背景，在3D场景中更显眼）
   var w = canvas.width, h = canvas.height;
   
   // 背景
-  var grad = ctx.createLinearGradient(0,0,0,h);
-  grad.addColorStop(0,'#0f172a');
-  grad.addColorStop(1,'#1e293b');
-  ctx.fillStyle = grad;
+  ctx.fillStyle = '#f1f5f9';
   ctx.fillRect(0,0,w,h);
   
   // 顶部导航条
-  ctx.fillStyle = '#6366f1';
+  ctx.fillStyle = '#4f46e5';
   roundRect(ctx,0,0,w,48,12);
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 18px sans-serif';
-  ctx.fillText('💰 记账本', 20, 33);
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillText('💰 记账本', 20, 32);
   
   // tab按钮
   var tabs = ['📝 记账','📋 账单','📊 统计','💰 预算','⚙️'];
@@ -119,51 +116,63 @@ function drawWebContent(url){
   for(var i=0;i<tabs.length;i++){
     ctx.fillStyle = i===0 ? 'rgba(255,255,255,.2)' : 'transparent';
     ctx.fillRect(16+i*80, 56, 74, 28);
-    ctx.fillStyle = i===0 ? '#fff' : '#64748b';
+    ctx.fillStyle = i===0 ? '#fff' : '#334155';
     ctx.fillText(tabs[i], 30+i*80, 76);
   }
   
   // 内容区域
-  ctx.fillStyle = '#1e293b';
+  ctx.fillStyle = '#ffffff';
   roundRect(ctx,16,94,w-32,280,10);
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth=1;
+  ctx.stroke();
   
   // 表单
-  ctx.fillStyle = '#6366f1';
+  ctx.fillStyle = '#4338ca';
   ctx.font = '14px sans-serif';
   ctx.fillText('📝 记一笔', 32, 122);
   
-  ctx.fillStyle = '#334155';
+  ctx.fillStyle = '#e2e8f0';
   roundRect(ctx,32,134,200,36,6);
-  ctx.fillStyle = '#94a3b8';
+  ctx.strokeStyle = '#cbd5e1'
+  ctx.lineWidth=1;
+  ctx.stroke();
+  ctx.fillStyle = '#64748b';
   ctx.font = '12px sans-serif';
   ctx.fillText('选择分类', 48, 158);
   
-  ctx.fillStyle = '#334155';
+  ctx.fillStyle = '#e2e8f0';
   roundRect(ctx,32,180,200,36,6);
-  ctx.fillStyle = '#94a3b8';
+  ctx.stroke();
+  ctx.fillStyle = '#64748b';
   ctx.fillText('金额', 48, 204);
   
   // 输入框
-  ctx.fillStyle = '#334155';
+  ctx.fillStyle = '#e2e8f0';
   roundRect(ctx,244,134,180,36,6);
+  ctx.stroke();
   roundRect(ctx,244,180,180,82,6);
-  ctx.fillStyle = '#94a3b8';
+  ctx.stroke();
+  ctx.fillStyle = '#64748b';
   ctx.font = '11px sans-serif';
   ctx.fillText('备注(选填)', 260, 205);
   
   // 确认按钮
-  ctx.fillStyle = '#6366f1';
+  ctx.fillStyle = '#4f46e5';
   roundRect(ctx,32,276,w-64,38,8);
   ctx.fillStyle = '#fff';
   ctx.font = '14px sans-serif';
   ctx.fillText('✅ 确认记账', w/2-48, 302);
   
   // 底部最近记录
-  ctx.fillStyle = '#64748b';
+  ctx.fillStyle = '#475569';
   ctx.font = '12px sans-serif';
   ctx.fillText('最近记录', 32, 340);
-  ctx.fillStyle = '#334155';
+  ctx.fillStyle = '#ffffff';
   roundRect(ctx,32,350,w-64,100,6);
+  ctx.strokeStyle='#e2e8f0';
+  ctx.lineWidth=1;
+  ctx.stroke();
   
   // 模拟列表
   var items = [
@@ -174,16 +183,16 @@ function drawWebContent(url){
   ctx.font = '12px sans-serif';
   for(var i=0;i<items.length;i++){
     var y = 358+i*32;
-    ctx.fillStyle = '#e2e8f0';
+    ctx.fillStyle = '#1e293b';
     ctx.fillText(items[i][0], 48, y);
-    ctx.fillStyle = '#6366f1';
+    ctx.fillStyle = '#4f46e5';
     ctx.font = 'bold 12px sans-serif';
     ctx.fillText(items[i][1], 280, y);
     ctx.font = '12px sans-serif';
     ctx.fillStyle = '#64748b';
     ctx.fillText(items[i][2], 360, y);
     // 分割线
-    ctx.strokeStyle = '#1e293b';
+    ctx.strokeStyle = '#f1f5f9';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(48, y+14);
@@ -192,12 +201,12 @@ function drawWebContent(url){
   }
   
   // 网址水印
-  ctx.fillStyle = 'rgba(255,255,255,.08)';
+  ctx.fillStyle = 'rgba(0,0,0,.1)';
   ctx.font = '10px sans-serif';
   ctx.fillText(url, 16, h-12);
   
   // 更新时间
-  ctx.fillStyle = 'rgba(255,255,255,.04)';
+  ctx.fillStyle = 'rgba(0,0,0,.06)';
   ctx.font = '9px sans-serif';
   ctx.fillText(new Date().toLocaleTimeString('zh-CN'), w-80, h-12);
   
@@ -452,14 +461,13 @@ function createClothMesh(){
   var material = new THREE.MeshPhysicalMaterial({
     map: texture,
     side: THREE.DoubleSide,
-    roughness: 0.15,
-    metalness: 0.05,
-    clearcoat: 0.3,
-    clearcoatRoughness: 0.2,
-    envMapIntensity: 0.6,
-    // 让布料有光泽
-    specularIntensity: 0.2,
-    specularColor: new THREE.Color(0x444466)
+    roughness: 0.08,
+    metalness: 0.1,
+    clearcoat: 0.6,
+    clearcoatRoughness: 0.15,
+    envMapIntensity: 1.0,
+    specularIntensity: 0.4,
+    specularColor: new THREE.Color(0x8888ff) // 蓝色高光
   });
   
   clothMesh = new THREE.Mesh(clothGeometry, material);
@@ -490,7 +498,7 @@ function loadWebPage(){
 // ====== 场景初始化 ======
 function initScene(){
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0f0f23);
+  scene.background = new THREE.Color(0x050510);
   
   // 相机
   camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
@@ -504,15 +512,19 @@ function initScene(){
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.6;
   document.body.appendChild(renderer.domElement);
   
-  // 环境光
-  var ambient = new THREE.AmbientLight(0x404060, 0.5);
+  // 环境光（增强）
+  var ambient = new THREE.AmbientLight(0x8888ff, 0.8);
   scene.add(ambient);
   
-  // 主光
-  var light = new THREE.DirectionalLight(0xffeedd, 1.5);
+  // 半球光
+  var hemi = new THREE.HemisphereLight(0x8888ff, 0x444422, 0.6);
+  scene.add(hemi);
+  
+  // 主光（更亮）
+  var light = new THREE.DirectionalLight(0xffffff, 2.5);
   light.position.set(5, 10, 7);
   light.castShadow = true;
   light.shadow.mapSize.width = 1024;
@@ -520,17 +532,17 @@ function initScene(){
   scene.add(light);
   
   // 补光
-  var fillLight = new THREE.DirectionalLight(0x8888ff, 0.6);
+  var fillLight = new THREE.DirectionalLight(0xaaaaff, 1.2);
   fillLight.position.set(-5, 3, -5);
   scene.add(fillLight);
   
   // 背光
-  var backLight = new THREE.DirectionalLight(0x4466ff, 0.3);
+  var backLight = new THREE.DirectionalLight(0x88aaff, 0.8);
   backLight.position.set(0, 0, -8);
   scene.add(backLight);
   
   // 底部补光
-  var rim = new THREE.DirectionalLight(0x6633ff, 0.2);
+  var rim = new THREE.DirectionalLight(0x8844ff, 0.5);
   rim.position.set(0, -5, 3);
   scene.add(rim);
   
