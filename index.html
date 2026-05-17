@@ -55,7 +55,8 @@ body{background:#0f0f23;overflow:hidden;font-family:'Segoe UI',sans-serif;color:
   <span class="key">SHIFT</span> + 拖拽旋转视角
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Three.js 使用jsdelivr r160（移动端兼容性更好） -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
 // ====== 全局 ======
 var scene, camera, renderer;
@@ -107,9 +108,7 @@ function drawWebContent(url){
   
   // 顶部导航条
   ctx.fillStyle = '#6366f1';
-  ctx.beginPath();
-  ctx.roundRect(0,0,w,48,12);
-  ctx.fill();
+  roundRect(ctx,0,0,w,48,12);
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 18px sans-serif';
   ctx.fillText('💰 记账本', 20, 33);
@@ -126,8 +125,7 @@ function drawWebContent(url){
   
   // 内容区域
   ctx.fillStyle = '#1e293b';
-  ctx.roundRect(16,94,w-32,280,10);
-  ctx.fill();
+  roundRect(ctx,16,94,w-32,280,10);
   
   // 表单
   ctx.fillStyle = '#6366f1';
@@ -135,32 +133,27 @@ function drawWebContent(url){
   ctx.fillText('📝 记一笔', 32, 122);
   
   ctx.fillStyle = '#334155';
-  ctx.roundRect(32,134,200,36,6);
-  ctx.fill();
+  roundRect(ctx,32,134,200,36,6);
   ctx.fillStyle = '#94a3b8';
   ctx.font = '12px sans-serif';
   ctx.fillText('选择分类', 48, 158);
   
   ctx.fillStyle = '#334155';
-  ctx.roundRect(32,180,200,36,6);
-  ctx.fill();
+  roundRect(ctx,32,180,200,36,6);
   ctx.fillStyle = '#94a3b8';
   ctx.fillText('金额', 48, 204);
   
   // 输入框
   ctx.fillStyle = '#334155';
-  ctx.roundRect(244,134,180,36,6);
-  ctx.fill();
-  ctx.roundRect(244,180,180,82,6);
-  ctx.fill();
+  roundRect(ctx,244,134,180,36,6);
+  roundRect(ctx,244,180,180,82,6);
   ctx.fillStyle = '#94a3b8';
   ctx.font = '11px sans-serif';
   ctx.fillText('备注(选填)', 260, 205);
   
   // 确认按钮
   ctx.fillStyle = '#6366f1';
-  ctx.roundRect(32,276,w-64,38,8);
-  ctx.fill();
+  roundRect(ctx,32,276,w-64,38,8);
   ctx.fillStyle = '#fff';
   ctx.font = '14px sans-serif';
   ctx.fillText('✅ 确认记账', w/2-48, 302);
@@ -170,8 +163,7 @@ function drawWebContent(url){
   ctx.font = '12px sans-serif';
   ctx.fillText('最近记录', 32, 340);
   ctx.fillStyle = '#334155';
-  ctx.roundRect(32,350,w-64,100,6);
-  ctx.fill();
+  roundRect(ctx,32,350,w-64,100,6);
   
   // 模拟列表
   var items = [
@@ -210,19 +202,6 @@ function drawWebContent(url){
   ctx.fillText(new Date().toLocaleTimeString('zh-CN'), w-80, h-12);
   
   updateTexture();
-}
-
-// roundRect polyfill (for Safari)
-if(!CanvasRenderingContext2D.prototype.roundRect){
-  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
-    if(r>w/2)r=w/2;if(r>h/2)r=h/2;
-    this.moveTo(x+r,y);
-    this.arcTo(x+w,y,x+w,y+h,r);
-    this.arcTo(x+w,y+h,x,y+h,r);
-    this.arcTo(x,y+h,x,y,r);
-    this.arcTo(x,y,x+w,y,r);
-    return this;
-  };
 }
 
 // ====== 布料物理 ======
@@ -494,7 +473,8 @@ function updateTexture(){
   if(!clothMesh) return;
   clothMesh.material.map = new THREE.CanvasTexture(canvas);
   clothMesh.material.map.needsUpdate = true;
-  clothMesh.material.map.encoding = THREE.sRGBEncoding;
+  // r160使用colorSpace替代encoding
+  if(clothMesh.material.map.colorSpace)clothMesh.material.map.colorSpace = 'srgb';
 }
 
 // ====== 加载真实网页（iframe截图方式） ======
@@ -525,7 +505,6 @@ function initScene(){
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
-  renderer.outputEncoding = THREE.sRGBEncoding;
   document.body.appendChild(renderer.domElement);
   
   // 环境光
@@ -574,6 +553,21 @@ function initScene(){
   addStars();
   
   createClothMesh();
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+  ctx.fill();
 }
 
 function addStars(){
