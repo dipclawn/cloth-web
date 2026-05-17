@@ -55,7 +55,7 @@ body{background:#0f0f23;overflow:hidden;font-family:'Segoe UI',sans-serif;color:
   <span class="key">SHIFT</span> + 拖拽旋转视角
 </div>
 
-<script async src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ====== 全局 ======
 var scene, camera, renderer;
@@ -758,34 +758,23 @@ function animate(){
 }
 
 // ====== 启动 ======
-function init(){
-  document.body.appendChild = function(el){
-    return HTMLElement.prototype.appendChild.call(document.body, el);
-  };
-  
+function boot(){
   initScene();
   setupInteraction();
   animate();
   
-  // 给加载按钮加回车
-  document.getElementById('url').addEventListener('keydown', function(e){
-    if(e.key === 'Enter') loadWebPage();
-  });
-  
-  // 初始提示
-  setTimeout(function(){toast('🖱️ 拖拽布料 · SHIFT+拖拽旋转')}, 1500);
-  
-  // 注册SW
-  if('serviceWorker' in navigator)navigator.serviceWorker.register('web/sw.js').catch(function(){});
+  document.getElementById('url').addEventListener('keydown',function(e){if(e.key==='Enter')loadWebPage()});
+  setTimeout(function(){toast('🖱️ 拖拽布料 · SHIFT+拖拽旋转')},1500);
+  if('serviceWorker'in navigator)navigator.serviceWorker.register('web/sw.js').catch(function(){});
 }
 
-// 等待Three.js加载完成
-var checkThree = setInterval(function(){
-  if(typeof THREE !== 'undefined'){
-    clearInterval(checkThree);
-    init();
-  }
-}, 100);
+// Three.js是普通script标签，保证在解析前已下载完毕
+// 但为了保险，用DOMContentLoaded确保DOM就绪
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',boot);
+}else{
+  boot();
+}
 </script>
 </body>
 </html>
