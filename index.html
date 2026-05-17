@@ -219,16 +219,15 @@ function initCloth(){
   constraints = [];
   pins = [];
   
-  // 创建粒子
+  // 创建粒子（竖直悬挂）
   for(var y=0; y<H; y++){
     for(var x=0; x<W; x++){
       var px = (x - W/2) * SPACING;
-      var py = 3.5; // 起始高度
-      var pz = (y - H/2) * SPACING;
+      var py = 3.6 - y/H * 7.2; // 竖直悬挂
+      var pz = (y - H/2) * SPACING * 0.5; // z轴略收窄
       
       // 稍微给一个初始弧度
       var curve = Math.sin(x/W * Math.PI) * 0.3;
-      py += curve;
       
       particles.push({
         x: px, y: py, z: pz,
@@ -240,9 +239,8 @@ function initCloth(){
     }
   }
   
-  // 固定上边两角
-  pinParticle(0, 0);      // 左上
-  pinParticle(W-1, 0);    // 右上
+  // 固定上边全部（类似窗帘杆）
+  for(var fx=0; fx<W; fx++) pinParticle(fx, 0);
   
   // 创建约束（结构约束 + 剪切约束）
   for(var y=0; y<H; y++){
@@ -502,8 +500,8 @@ function initScene(){
   
   // 相机
   camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
-  camera.position.set(7, 3, 10);
-  camera.lookAt(0, 2, 0);
+  camera.position.set(6, 3, 8);
+  camera.lookAt(0, 0, 0);
   
   // 渲染器
   renderer = new THREE.WebGLRenderer({antialias:true, alpha:false});
@@ -611,6 +609,8 @@ function addStars(){
 var isRotating = false;
 var prevMouse = {x:0, y:0};
 var rotation = {x:0, y:0};
+var autoRotate = true;
+var autoAngle = 0;
 
 function setupInteraction(){
   var canvas = renderer.domElement;
@@ -624,6 +624,9 @@ function setupInteraction(){
   
   // 鼠标按下 - 检测布料拖拽
   canvas.addEventListener('mousedown', function(e){
+    // 任何交互都停止自动旋转
+    autoRotate = false;
+    
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     
@@ -756,9 +759,15 @@ function animate(){
   for(var i=0; i<3; i++) simulateCloth();
   updateClothMesh();
   
-  // 视角旋转
-  scene.rotation.x = rotation.x * 0.3;
-  scene.rotation.y = rotation.y;
+  // 自动旋转（手机端）或手动旋转
+  if(autoRotate){
+    autoAngle += 0.003;
+    scene.rotation.y = Math.sin(autoAngle) * 0.6; // 左右摆动
+    scene.rotation.x = Math.sin(autoAngle*0.7) * 0.1 + 0.05; // 轻微上下
+  }else{
+    scene.rotation.x = rotation.x * 0.3;
+    scene.rotation.y = rotation.y;
+  }
   
   renderer.render(scene, camera);
 }
